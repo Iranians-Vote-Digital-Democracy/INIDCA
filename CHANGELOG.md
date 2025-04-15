@@ -1,0 +1,8 @@
+## v0.0.2: 
+1- Full coverage for MAV. class 
+- Reads cardholder's two certified public key {SIG, AUTH}, 
+- Reads certificate chain (Root CA -> Iran Digital Citizen CA).
+
+2- Coverage for Pardis. class, not tested for all certificates due to lack of card. 
+
+3- Implemented better logging for further analysis using tester cards

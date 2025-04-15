@@ -36,14 +36,17 @@ class AppLogger {
     addToLog(logMessage);
 
     // Schedule scroll to bottom after the UI updates
-    Future.delayed(const Duration(milliseconds: 100), () {
-      if (scrollController.hasClients) {
-        scrollController.animateTo(
-          scrollController.position.maxScrollExtent,
-          duration: const Duration(milliseconds: 200),
-          curve: Curves.easeOut,
-        );
-      }
-    });
+    Future.delayed(
+      const Duration(milliseconds: 100),
+      () {
+        if (scrollController.hasClients) {
+          scrollController.animateTo(
+            scrollController.position.maxScrollExtent,
+            duration: const Duration(milliseconds: 200),
+            curve: Curves.easeOut,
+          );
+        }
+      },
+    );
   }
 }

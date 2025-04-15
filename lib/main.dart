@@ -351,9 +351,9 @@ class BasicNfcAppState extends State<BasicNfcApp> {
     // Determine which certificate is currently in _lastCertificateData
     // This is a simplification; a better UI would let the user choose.
     String certType = _signCertSuccessfullyRead ? "SigningCert" : "AuthCert";
-    if (!_signCertSuccessfullyRead && !_authCertSuccessfullyRead)
+    if (!_signCertSuccessfullyRead && !_authCertSuccessfullyRead) {
       certType = "UnknownCert";
-
+    }
     String fileName = _lastCardId != null
         ? '${certType}_${_lastCardId!}.cer'
         : '${certType}_${DateTime.now().millisecondsSinceEpoch}.cer';
