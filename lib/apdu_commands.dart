@@ -34,6 +34,18 @@ const String APDU_7 = "00A4000C023F00"; // A4 3F00 with P1=0C
 const String APDU_8 = "00A4000C025100"; // A4 5100 with P1=0C
 const String APDU_9 = "00A4020C025040"; // A4 5040 with P1=02, P2=0C
 
+// APDU constants for MAV4 Authentication Certificate (from mav4_read_auth_cert.cpp)
+const String MAV_AUTH_SELECT_IAS_APP = "00A404000CA0000000180C000001634200";
+const String MAV_AUTH_SELECT_CM = "00A4040008A000000018434D00";
+const String MAV_AUTH_READ_CPLC = "80CA9F7F2D";
+const String MAV_AUTH_SELECT_MF = "00A40000023F00";
+const String MAV_AUTH_SELECT_DF_5000 = "00A40000025000"; // Note: DF 5000
+const String MAV_AUTH_SELECT_EF_5040 = "00A4020C025040";
+const String MAV_AUTH_SELECT_MF_P2 = "00A4000C023F00";
+const String MAV_AUTH_SELECT_DF_5000_P2 = "00A4000C025000"; // Note: DF 5000
+const String MAV_AUTH_SELECT_EF_5040_P2 = "00A4020C025040";
+const String MAV_AUTH_SELECT_EF_0303 = "00A4020C020303"; // Added from C++
+
 // Helper: convert hex string (e.g. "00A4040008...") to byte list
 List<int> hexStringToBytes(String hexString) {
   List<int> result = [];

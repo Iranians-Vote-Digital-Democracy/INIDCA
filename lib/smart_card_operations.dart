@@ -19,7 +19,7 @@ import 'package:flutter_nfc_kit/flutter_nfc_kit.dart';
 import 'package:inid_assistant/apdu_commands.dart' as apdu;
 import 'package:inid_assistant/data_processing.dart';
 import 'package:inid_assistant/logging.dart';
-import 'package:inid_assistant/nfc_logic.dart'; // Keep for command maps
+import 'package:inid_assistant/nfc_logic.dart'; // Ensure this import includes mavAuthCertCommands
 import 'package:inid_assistant/nfc_utils.dart';
 
 class SmartCardOperations {
@@ -491,6 +491,55 @@ class SmartCardOperations {
     );
   }
 
+  Future<Map<String, dynamic>?> readAuthenticationCertificate() async {
+    return _executeNfcOperation<Map<String, dynamic>>(
+      "Read MAV4 Authentication Certificate",
+      () async {
+        Map<String, dynamic> result = {
+          'success': false,
+          'certificateData': '',
+          'size': 0,
+        };
+
+        logger.log("Selecting files using MAV4 Auth sequence...");
+        bool selectionSuccess = await _selectFiles(mavAuthCertCommands);
+
+        if (!selectionSuccess) {
+          logger.log("❌ MAV4 Auth file selection failed. Aborting read.",
+              highlight: true);
+          // Optionally throw an exception or return the failure result directly
+          return result; // Indicate failure
+        } else {
+          logger.log("✅ MAV4 Auth file selection successful.");
+        }
+
+        logger.log("Reading MAV4 authentication certificate data...");
+        // Use a suitable chunk size, 0xFF is often safe for certificates
+        String fullData = await _readDataWithContinuation(0, 0xFF);
+
+        if (fullData.isNotEmpty) {
+          logger.log(
+              "MAV4 Auth certificate data collected: ${fullData.length ~/ 2} bytes");
+          result = {
+            'success': true,
+            'certificateData': fullData,
+            'size': fullData.length ~/ 2,
+          };
+          logger.log("Raw MAV4 Auth Certificate Hex: $fullData",
+              highlight: true);
+        } else {
+          logger.log(
+            "❌ Failed to read MAV4 Auth certificate - no data returned after selection.",
+            highlight: true,
+          );
+        }
+        return result;
+      },
+      successMessage: "MAV4 Auth certificate reading completed",
+      failureMessage: "Error reading MAV4 Auth certificate",
+    );
+  }
+
   Future<Map<String, dynamic>?> readSOD1() async {
     return _executeNfcOperation<Map<String, dynamic>>(
       "Read SOD1 Data",
@@ -561,145 +610,5 @@ class SmartCardOperations {
       successMessage: "SOD reading completed",
       failureMessage: "Error reading SOD",
     );
-  }
-
-  Future<Map<String, dynamic>?> readFullCertificate() async {
-    return _executeNfcOperation<Map<String, dynamic>>(
-      "Read Full Certificate (with Auth)",
-      () async {
-        Map<String, dynamic> result = {
-          'success': false,
-          'certificateData': '',
-          'size': 0,
-        };
-
-        logger.log("Detecting card type...");
-        String cardType = await detectCardType();
-        logger.log("Card appears to be: $cardType");
-
-        logger.log("Selecting Card Manager or alternative...");
-        Map<String, String> cmRes =
-            await apdu.transmitAPDU('00A4040008A000000018434D00');
-        if (cmRes['success'] != 'true') {
-          logger.log(
-              "Failed to select Card Manager: ${cmRes['swDescription']} - trying PARDIS");
-          Map<String, String> pardisRes =
-              await apdu.transmitAPDU('00A404000F50415244495320');
-          if (pardisRes['success'] != 'true') {
-            throw Exception("Failed to select Card Manager or PARDIS applet");
-          }
-        }
-
-        logger.log("Performing card authentication (Placeholder)...");
-        bool authenticated = await performCardAuthentication(cardType);
-        if (!authenticated) {
-          throw Exception("Card Authentication Failed");
-        }
-        logger.log("✅ Authentication successful (Placeholder)");
-
-        logger.log("Selecting certificate file path...");
-        bool pathSelected = await selectCertificatePath(cardType);
-        if (!pathSelected) {
-          throw Exception("Failed to select certificate file path");
-        }
-        logger.log("✅ Certificate path selected");
-
-        logger.log("Reading certificate data...");
-        String fullData = await _readDataWithContinuation(0, 0xFF);
-
-        if (fullData.isNotEmpty) {
-          logger.log(
-              "Total certificate data collected: ${fullData.length ~/ 2} bytes");
-
-          if (fullData.length ~/ 2 <= 20) {
-            logger.log(
-                "Possible certificate reference found, attempting retrieval...");
-            String retrievedCert = await retrieveFullCertificate(fullData);
-            if (retrievedCert.length > fullData.length) {
-              fullData = retrievedCert;
-              logger.log(
-                  "Successfully retrieved full certificate: ${fullData.length ~/ 2} bytes");
-            }
-          }
-
-          result = {
-            'success': true,
-            'certificateData': fullData,
-            'size': fullData.length ~/ 2,
-          };
-        } else {
-          logger.log(
-              "❌ No certificate data read after authentication and selection.");
-        }
-
-        return result;
-      },
-      successMessage: "Full certificate reading completed",
-      failureMessage: "Error reading full certificate",
-    );
-  }
-
-  Future<String> detectCardType() async {
-    try {
-      Map<String, String> cplcRes = await apdu.transmitAPDU('80CA9F7F2D');
-      if (cplcRes['success'] == 'true' && cplcRes['data']!.length > 40) {
-        String icInfo = cplcRes['data']!.substring(16, 24);
-        if (icInfo.startsWith('9143')) return 'MAV4';
-        if (icInfo.startsWith('8050')) return 'PARDIS';
-      }
-
-      Map<String, String> iasRes =
-          await apdu.transmitAPDU('00A404000CA0000000180C000001634200');
-      if (iasRes['success'] == 'true') return 'IAS_ECC';
-
-      return 'UNKNOWN';
-    } catch (e) {
-      logger.log("Error during card type detection: $e");
-      return 'UNKNOWN';
-    }
-  }
-
-  Future<bool> performCardAuthentication(String cardType) async {
-    logger.log("Authenticating (Placeholder - requires real keys/crypto)...");
-    try {
-      if (cardType == 'MAV4' || cardType == 'PARDIS' || cardType == 'UNKNOWN') {
-        logger.log("⚠️ Authentication bypassed (using placeholder logic)");
-        return true;
-      }
-      return false;
-    } catch (e) {
-      logger.log("Authentication error: $e");
-      return false;
-    }
-  }
-
-  Future<bool> selectCertificatePath(String cardType) async {
-    logger.log("Selecting certificate path for $cardType...");
-    try {
-      await apdu.transmitAPDU('00A40000023F00');
-      await apdu.transmitAPDU('00A40000025100');
-
-      String selectEFCmd =
-          (cardType == 'PARDIS') ? '00A40200025040' : '00A4020C025040';
-
-      Map<String, String> efRes = await apdu.transmitAPDU(selectEFCmd);
-
-      if (efRes['success'] != 'true' && cardType == 'UNKNOWN') {
-        logger.log("Default EF select failed, trying alternative...");
-        selectEFCmd = '00A40200025040';
-        efRes = await apdu.transmitAPDU(selectEFCmd);
-      }
-
-      return efRes['success'] == 'true';
-    } catch (e) {
-      logger.log("Error selecting certificate path: $e");
-      return false;
-    }
-  }
-
-  Future<String> retrieveFullCertificate(String certRef) async {
-    logger.log(
-        "Attempting to retrieve full certificate from reference (Placeholder)...");
-    return certRef;
   }
 }

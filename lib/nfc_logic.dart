@@ -16,6 +16,7 @@
  */
 
 import 'package:flutter/foundation.dart';
+import 'package:inid_assistant/apdu_commands.dart' as apdu;
 
 // APDU commands for X509 certificate retrieval - fixed formats based on error logs
 const Map<String, String> x509Commands = {
@@ -94,23 +95,10 @@ const Map<String, String> signingCertCommands = {
   'SELECT_EF_5040_P2': '00A4020C025040',
 };
 
-// Commands for reading authentication certificate
-const Map<String, String> authCertCommands = {
-  'SELECT_IAS_APP': '00A404000CA000000018C0000001634200',
-  'SELECT_CARD_MANAGER': '00A4040008A000000018434D00',
-  'SELECT_MF': '00A40000023F00',
-  'SELECT_DF_50': '00A40000025000',
-  'SELECT_EF_5040': '00A4020C025040',
-  'SELECT_MF_P2': '00A4000C023F00',
-  'SELECT_DF_50_P2': '00A4000C025000',
-  'SELECT_EF_5040_P2': '00A4020C025040',
-  'SELECT_EF_0303': '00A4020C020303',
-};
-
 // Commands for reading signing certificate from Pardis cards
 const Map<String, String> pardisSigningCertCommands = {
-  // Corrected Lc from 0F to 07
-  'SELECT_APP': '00A404000750415244495320', // SELECT AID PARDIS (7 bytes)
+  'SELECT_APP':
+      '00A404000F5041524449532C4D41544952414E20', // Updated to match C++ reference
   'SELECT_MF': '00A40000023F00', // SELECT MF
   'SELECT_DF': '00A40000025100', // SELECT DF 5100
   'SELECT_EF': '00A40200025040', // SELECT EF 5040 (P1=02, P2=00)
@@ -132,6 +120,21 @@ const Map<String, String> afisCheckCommands = {
   'SELECT_EF_CSN': '00A40200020302',
 };
 
+// --- New Command Map for MAV4 Authentication Certificate ---
+const Map<String, String> mavAuthCertCommands = {
+  'SELECT_IAS_APP_1': apdu.MAV_AUTH_SELECT_IAS_APP,
+  'SELECT_CARD_MANAGER': apdu.MAV_AUTH_SELECT_CM,
+  'READ_CPLC': apdu.MAV_AUTH_READ_CPLC,
+  'SELECT_IAS_APP_2': apdu.MAV_AUTH_SELECT_IAS_APP, // Select again
+  'SELECT_MF': apdu.MAV_AUTH_SELECT_MF,
+  'SELECT_DF_5000': apdu.MAV_AUTH_SELECT_DF_5000,
+  'SELECT_EF_5040': apdu.MAV_AUTH_SELECT_EF_5040,
+  'SELECT_MF_P2': apdu.MAV_AUTH_SELECT_MF_P2,
+  'SELECT_DF_5000_P2': apdu.MAV_AUTH_SELECT_DF_5000_P2,
+  'SELECT_EF_5040_P2': apdu.MAV_AUTH_SELECT_EF_5040_P2,
+  'SELECT_EF_0303': apdu.MAV_AUTH_SELECT_EF_0303,
+};
+
 // Helper class to format READ BINARY commands with offset
 String formatReadBinaryCommand(int offset, int length) {
   String p1Hex = ((offset >> 8) & 0xFF).toRadixString(16).padLeft(2, '0');
@@ -141,43 +144,6 @@ String formatReadBinaryCommand(int offset, int length) {
 }
 
 // This is just an example, the actual implementation will be in your NFC reading logic
-
-Future<void> retrieveCertificate() async {
-  try {
-    // Simulate retrieving certificate data
-    List<int> certificateData = [
-      0x30,
-      0x47,
-      0x32,
-      0x10,
-      0x36,
-      0x79,
-      0x40,
-      0x36,
-      0x31,
-      0x31,
-      0x01,
-      0x08,
-      0x9A,
-      0x00,
-      0x10,
-      0x24,
-      0x20,
-      0x01,
-    ]; // Example data
-
-    // Convert the certificate data to a hex string for printing
-    String certificateHex = certificateData
-        .map((byte) => byte.toRadixString(16).padLeft(2, '0'))
-        .join();
-
-    // Print the certificate data to the debug console
-    debugPrint('Certificate Data (Hex): $certificateHex');
-
-  } catch (e) {
-    print('Error retrieving certificate: $e');
-  }
-}
 
 void logCertificateData(
   String cardId,

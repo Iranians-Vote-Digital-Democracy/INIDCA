@@ -244,17 +244,20 @@ class CertificateUtils {
   }
 
   /// Saves certificate data securely. Replaces the old method.
-  static Future<String> saveCertificateAsBinary(
-    Uint8List certificateData, // Changed to Uint8List
-  ) async {
-    try {
-      // Use only secure storage
-      return await securelySaveCertificate(certificateData);
-    } catch (e) {
-      debugPrint('Error in secure certificate storage: $e');
-      // Propagate the error message
-      return 'Error saving certificate: $e';
-    }
+  static Future<String> saveCertificateAsBinary(Uint8List certificateData,
+      {String prefix = "Certificate"}) async {
+    // Use the prefix to generate a filename
+    String fileName = "${prefix}_${DateTime.now().millisecondsSinceEpoch}.bin";
+
+    // Save the certificate data to a file
+    final Directory tempDir = await getTemporaryDirectory();
+    final String filePath = '${tempDir.path}/$fileName';
+    final File file = File(filePath);
+
+    await file.writeAsBytes(certificateData);
+
+    debugPrint('Certificate saved as binary at: $filePath');
+    return filePath;
   }
 
   /// Retrieve a certificate from secure storage by ID

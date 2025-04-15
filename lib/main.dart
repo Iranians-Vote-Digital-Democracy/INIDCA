@@ -18,11 +18,12 @@
 import 'dart:convert';
 import 'dart:developer' as developer;
 import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_nfc_kit/flutter_nfc_kit.dart';
 import 'package:inid_assistant/certificate_export.dart';
 import 'package:inid_assistant/certificate_utils.dart';
-import 'package:inid_assistant/logging.dart'; 
+import 'package:inid_assistant/logging.dart';
 import 'package:inid_assistant/smart_card_operations.dart';
 import 'package:x509/x509.dart';
 
@@ -43,7 +44,9 @@ class BasicNfcApp extends StatefulWidget {
 
 class BasicNfcAppState extends State<BasicNfcApp> {
   String _log = "Press the button to send an APDU command.";
-  bool _certSuccessfullyRead = false; // New state to track if cert was read
+  bool _signCertSuccessfullyRead = false; // Rename for clarity
+  bool _authCertSuccessfullyRead = false; // Track auth cert separately
+  bool _certSuccessfullyRead = false; // General state for UI
   NFCAvailability _nfcStatus = NFCAvailability.not_supported;
   final ScrollController _scrollController = ScrollController();
 
@@ -86,50 +89,96 @@ class BasicNfcAppState extends State<BasicNfcApp> {
     _startAutomaticExtraction();
   }
 
-  // Modified automatic extraction method to use SmartCardOperations
   Future<void> _startAutomaticExtraction() async {
-    // Skip if we already have a certificate or if widget is disposed
-    if (_certSuccessfullyRead || !mounted) return;
+    // Skip if we already have both certificates or if widget is disposed
+    if ((_signCertSuccessfullyRead && _authCertSuccessfullyRead) || !mounted)
+      return;
 
     _logger.log("Attempting automatic certificate extraction...");
 
-    // Use the refactored method from SmartCardOperations
-    Map<String, dynamic>? certResult =
-        await _smartCardOps.readSigningCertificate();
+    // --- Read Signing Certificate ---
+    if (!_signCertSuccessfullyRead) {
+      _logger.log("--> Reading Signing Certificate...");
+      Map<String, dynamic>? signCertResult =
+          await _smartCardOps.readSigningCertificate();
 
-    if (!mounted) return;
+      if (!mounted) return; // Check mount status after await
 
-    if (certResult != null && certResult['success'] == true) {
-      String certHex = certResult['certificateData'];
-      Uint8List certBytes = CertificateUtils.hexStringToBytes(certHex);
+      if (signCertResult != null && signCertResult['success'] == true) {
+        String certHex = signCertResult['certificateData'];
+        Uint8List certBytes = CertificateUtils.hexStringToBytes(certHex);
 
-      if (certBytes.isNotEmpty) {
-        _logger.log(
-          "Certificate extracted successfully (${certResult['size']} bytes).",
-          highlight: true,
-        );
-        _processCertificateData(certBytes, "SigningCert");
+        if (certBytes.isNotEmpty) {
+          _logger.log(
+            "✅ Signing Certificate extracted successfully (${signCertResult['size']} bytes).",
+            highlight: true,
+          );
+          _processCertificateData(certBytes, "SigningCert"); // Process it
 
-        setState(() {
-          _certSuccessfullyRead = true;
-        });
-        return;
+          if (mounted) {
+            setState(() {
+              _signCertSuccessfullyRead = true;
+              _certSuccessfullyRead = true;
+            });
+          }
+        } else {
+          _logger.log(
+            "⚠️ Signing Certificate extraction successful but data is empty.",
+            highlight: true,
+          );
+        }
       } else {
         _logger.log(
-          "Extraction successful but certificate data is empty.",
+          "❌ Signing Certificate extraction failed or was cancelled.",
           highlight: true,
         );
       }
-    } else {
-      _logger.log(
-        "Automatic certificate extraction failed or was cancelled.",
-        highlight: true,
-      );
     }
 
+    // --- Read Authentication Certificate ---
+    if (mounted && !_authCertSuccessfullyRead) {
+      _logger.log("--> Reading MAV4 Authentication Certificate...");
+      Map<String, dynamic>? authCertResult =
+          await _smartCardOps.readAuthenticationCertificate();
+
+      if (!mounted) return; // Check mount status after await
+
+      if (authCertResult != null && authCertResult['success'] == true) {
+        String certHex = authCertResult['certificateData'];
+        Uint8List certBytes = CertificateUtils.hexStringToBytes(certHex);
+
+        if (certBytes.isNotEmpty) {
+          _logger.log(
+            "✅ MAV4 Auth Certificate extracted successfully (${authCertResult['size']} bytes).",
+            highlight: true,
+          );
+          _processCertificateData(certBytes, "AuthCert"); // Process it
+
+          if (mounted) {
+            setState(() {
+              _authCertSuccessfullyRead = true;
+            });
+          }
+        } else {
+          _logger.log(
+            "⚠️ MAV4 Auth Certificate extraction successful but data is empty.",
+            highlight: true,
+          );
+        }
+      } else {
+        _logger.log(
+          "❌ MAV4 Auth Certificate extraction failed or was cancelled.",
+          highlight: true,
+        );
+      }
+    }
+
+    // --- Retry Logic ---
     await Future.delayed(const Duration(seconds: 5));
-    if (mounted && !_certSuccessfullyRead) {
-      _startAutomaticExtraction();
+    if (mounted && !(_signCertSuccessfullyRead && _authCertSuccessfullyRead)) {
+      _startAutomaticExtraction(); // Recursive call if not all certs are read
+    } else if (mounted) {
+      _logger.log("✅ All required certificates extracted.", highlight: true);
     }
   }
 
@@ -137,9 +186,11 @@ class BasicNfcAppState extends State<BasicNfcApp> {
   void _refreshCertificate() {
     if (!mounted) return;
     setState(() {
-      _certSuccessfullyRead = false;
+      _signCertSuccessfullyRead = false; // Reset both flags
+      _authCertSuccessfullyRead = false;
+      _certSuccessfullyRead = false; // Reset general flag too
       _log = "Starting certificate refresh...";
-      _lastCertificateData = Uint8List(0);
+      _lastCertificateData = Uint8List(0); // Clear last displayed cert
     });
     _logger.log("Certificate refresh requested", highlight: true);
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -148,7 +199,7 @@ class BasicNfcAppState extends State<BasicNfcApp> {
           _log = "Starting certificate refresh...";
         });
       }
-      _startAutomaticExtraction();
+      _startAutomaticExtraction(); // Start the combined extraction process
     });
   }
 
@@ -209,9 +260,13 @@ class BasicNfcAppState extends State<BasicNfcApp> {
     }
 
     try {
-      setState(() {
-        _lastCertificateData = certificateData;
-      });
+      if (approach == "SigningCert" || _lastCertificateData.isEmpty) {
+        if (mounted) {
+          setState(() {
+            _lastCertificateData = certificateData;
+          });
+        }
+      }
 
       String hexData = CertificateUtils.toHexString(certificateData);
 
@@ -223,16 +278,18 @@ class BasicNfcAppState extends State<BasicNfcApp> {
       _logger.log("\n=== FULL $approach CERTIFICATE DATA ===", highlight: true);
       CertificateUtils.addFullCertificateToLog(
         hexData,
-        // This is the function being passed as the parameter:
         addToLog: (msg, {highlight = false}) =>
             _logger.log(msg, highlight: highlight),
       );
       _logger.log("=== END $approach CERTIFICATE DATA ===", highlight: true);
 
+      // Corrected parameter name
       final certId = await CertificateUtils.saveCertificateAsBinary(
         certificateData,
+        prefix: approach, // Corrected from filenamePrefix to prefix
       );
-      _logger.log("Certificate securely stored: $certId", highlight: true);
+      _logger.log("$approach Certificate securely stored: $certId",
+          highlight: true);
 
       final pemData = CertificateExporter.toPEM(certificateData);
       _logger.log("\n=== $approach CERTIFICATE DATA (PEM) ===",
@@ -243,7 +300,8 @@ class BasicNfcAppState extends State<BasicNfcApp> {
 
       _parseAndLogX509Certificate(certificateData, approach);
     } catch (e) {
-      _logger.log("Error processing certificate data: $e", highlight: true);
+      _logger.log("Error processing $approach certificate data: $e",
+          highlight: true);
     }
   }
 
@@ -278,7 +336,7 @@ class BasicNfcAppState extends State<BasicNfcApp> {
     }
   }
 
-  // Method to handle certificate export
+  // Method to handle certificate export (exports the currently displayed cert)
   void _exportCertificate() async {
     if (!mounted) return;
 
@@ -290,9 +348,15 @@ class BasicNfcAppState extends State<BasicNfcApp> {
       return;
     }
 
+    // Determine which certificate is currently in _lastCertificateData
+    // This is a simplification; a better UI would let the user choose.
+    String certType = _signCertSuccessfullyRead ? "SigningCert" : "AuthCert";
+    if (!_signCertSuccessfullyRead && !_authCertSuccessfullyRead)
+      certType = "UnknownCert";
+
     String fileName = _lastCardId != null
-        ? 'certificate_${_lastCardId!}.cer'
-        : 'certificate_${DateTime.now().millisecondsSinceEpoch}.cer';
+        ? '${certType}_${_lastCardId!}.cer'
+        : '${certType}_${DateTime.now().millisecondsSinceEpoch}.cer';
 
     try {
       String filePath =
@@ -372,7 +436,8 @@ class BasicNfcAppState extends State<BasicNfcApp> {
               ),
             ),
             const SizedBox(height: 16),
-            if (_certSuccessfullyRead)
+            // Show buttons if *any* certificate was successfully read
+            if (_signCertSuccessfullyRead || _authCertSuccessfullyRead)
               Row(
                 children: [
                   Expanded(
@@ -385,7 +450,7 @@ class BasicNfcAppState extends State<BasicNfcApp> {
                       child: const Padding(
                         padding: EdgeInsets.all(12.0),
                         child: Text(
-                          "Refresh Certificate",
+                          "Refresh Certificates", // Plural now
                           style: TextStyle(fontSize: 16),
                         ),
                       ),
@@ -394,15 +459,19 @@ class BasicNfcAppState extends State<BasicNfcApp> {
                   const SizedBox(width: 8),
                   Expanded(
                     child: ElevatedButton(
-                      onPressed: _exportCertificate,
+                      // Only enable export if _lastCertificateData is not empty
+                      onPressed: _lastCertificateData.isNotEmpty
+                          ? _exportCertificate
+                          : null,
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.green,
                         foregroundColor: Colors.white,
+                        disabledBackgroundColor: Colors.grey,
                       ),
                       child: const Padding(
                         padding: EdgeInsets.all(12.0),
                         child: Text(
-                          "Export Certificate",
+                          "Export Certificate", // Exports the one in _lastCertificateData
                           style: TextStyle(fontSize: 16),
                         ),
                       ),
