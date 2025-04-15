@@ -1,4 +1,4 @@
-## v0.0.2: 
+## v0.0.2 2025 Tue 15. Apr: 
 1- Full coverage for MAV. class 
 - Reads cardholder's two certified public key {SIG, AUTH}, 
 - Reads certificate chain (Root CA -> Iran Digital Citizen CA).
