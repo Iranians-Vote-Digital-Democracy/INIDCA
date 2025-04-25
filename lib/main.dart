@@ -17,6 +17,7 @@
 
 import 'dart:convert';
 import 'dart:developer' as developer;
+import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -25,6 +26,9 @@ import 'package:inid_assistant/certificate_export.dart';
 import 'package:inid_assistant/certificate_utils.dart';
 import 'package:inid_assistant/logging.dart';
 import 'package:inid_assistant/smart_card_operations.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:x509/x509.dart';
 
 void main() async {
@@ -91,8 +95,9 @@ class BasicNfcAppState extends State<BasicNfcApp> {
 
   Future<void> _startAutomaticExtraction() async {
     // Skip if we already have both certificates or if widget is disposed
-    if ((_signCertSuccessfullyRead && _authCertSuccessfullyRead) || !mounted)
+    if ((_signCertSuccessfullyRead && _authCertSuccessfullyRead) || !mounted) {
       return;
+    }
 
     _logger.log("Attempting automatic certificate extraction...");
 
@@ -379,6 +384,156 @@ class BasicNfcAppState extends State<BasicNfcApp> {
     }
   }
 
+  Future<void> _sendErrorLogs() async {
+    try {
+      final logText = """
+INID Assistant Error Logs
+Device ID: ${_lastCardId ?? 'Unknown'}
+Time: ${DateTime.now()}
+
+$_log
+
+Please send this file to hello@iranians.vote
+""";
+
+      bool launchedEmail =
+          false; // Flag to track if any email client was launched
+
+      // --- Platform-Specific Email Attempts ---
+      if (Platform.isAndroid) {
+        _logger.log("Attempting Android-specific email launch...",
+            highlight: true);
+
+        // Method 1: Try mailto with external application mode (often preferred)
+        final Uri mailtoUriExternal = Uri.parse(
+          'mailto:hello@iranians.vote?subject=INID+Error+Logs&body=${Uri.encodeComponent(logText)}',
+        );
+        _logger.log("Trying mailto with external mode...", highlight: true);
+        if (await canLaunchUrl(mailtoUriExternal)) {
+          try {
+            await launchUrl(mailtoUriExternal,
+                mode: LaunchMode.externalApplication);
+            _logger.log("Launched mailto external successfully.",
+                highlight: true);
+            launchedEmail = true;
+          } catch (e) {
+            _logger.log("Failed launching mailto external: $e");
+          }
+        } else {
+          _logger.log("Cannot launch mailto external.");
+        }
+
+        // Method 2: If external failed, try standard mailto (might show chooser)
+        if (!launchedEmail) {
+          final Uri mailtoUriStandard = Uri(
+            scheme: 'mailto',
+            path: 'hello@iranians.vote',
+            queryParameters: {
+              'subject': 'INID Error Logs',
+              'body': logText,
+            },
+          );
+          _logger.log("Trying standard mailto...", highlight: true);
+          if (await canLaunchUrl(mailtoUriStandard)) {
+            try {
+              await launchUrl(mailtoUriStandard);
+              _logger.log("Launched standard mailto successfully.",
+                  highlight: true);
+              launchedEmail = true;
+            } catch (e) {
+              _logger.log("Failed launching standard mailto: $e");
+            }
+          } else {
+            _logger.log("Cannot launch standard mailto.");
+          }
+        }
+      } else if (Platform.isIOS) {
+        _logger.log("Attempting iOS-specific email launch...", highlight: true);
+        bool isGmailUriAvailable = false;
+        try {
+          isGmailUriAvailable = await canLaunchUrl(Uri.parse('googlegmail://'));
+        } catch (e) {
+          _logger.log("Error checking googlegmail scheme: $e");
+        }
+
+        // Try iOS Gmail scheme first
+        if (isGmailUriAvailable) {
+          final Uri gmailUri = Uri.parse(
+            'googlegmail:///co?to=hello@iranians.vote&subject=INID+Error+Logs&body=${Uri.encodeComponent(logText)}',
+          );
+          _logger.log("Trying googlegmail scheme...", highlight: true);
+          if (await canLaunchUrl(gmailUri)) {
+            try {
+              await launchUrl(gmailUri);
+              _logger.log("Launched googlegmail successfully.",
+                  highlight: true);
+              launchedEmail = true;
+            } catch (e) {
+              _logger.log("Failed launching googlegmail: $e");
+            }
+          } else {
+            _logger.log("Cannot launch googlegmail scheme.");
+          }
+        }
+
+        // If Gmail scheme fails or isn't available, try standard mailto on iOS
+        if (!launchedEmail) {
+          final Uri mailtoUri = Uri(
+            scheme: 'mailto',
+            path: 'hello@iranians.vote',
+            queryParameters: {'subject': 'INID Error Logs', 'body': logText},
+          );
+          _logger.log("Trying standard mailto on iOS...", highlight: true);
+          if (await canLaunchUrl(mailtoUri)) {
+            try {
+              await launchUrl(mailtoUri);
+              _logger.log("Launched standard mailto on iOS successfully.",
+                  highlight: true);
+              launchedEmail = true;
+            } catch (e) {
+              _logger.log("Failed launching standard mailto on iOS: $e");
+            }
+          } else {
+            _logger.log("Cannot launch standard mailto on iOS.");
+          }
+        }
+      }
+
+      // --- Fallback to File Sharing ---
+      if (!launchedEmail) {
+        _logger.log("Email launch failed, falling back to file sharing...",
+            highlight: true);
+        final String logFileName =
+            "inid_error_logs_${DateTime.now().millisecondsSinceEpoch}.txt";
+        final tempDir = await getTemporaryDirectory();
+        final file = File('${tempDir.path}/$logFileName');
+        await file.writeAsString(logText);
+
+        _logger.log("Sharing logs as file...", highlight: true);
+        final result = await Share.shareXFiles(
+          [XFile(file.path)],
+          subject: "INID Assistant Error Logs",
+          text: "Please send these logs to hello@iranians.vote",
+        );
+
+        if (result.status == ShareResultStatus.success) {
+          _logger.log("Logs shared successfully via file sharing.",
+              highlight: true);
+        } else {
+          _logger.log("File sharing dialog dismissed or canceled.",
+              highlight: true);
+        }
+      }
+    } catch (e) {
+      _logger.log("Error sending logs: $e", highlight: true);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Error sending logs: $e")),
+        );
+      }
+    }
+  }
+
   Color _getNfcStatusColor() {
     return switch (_nfcStatus) {
       NFCAvailability.available => Colors.green.shade100,
@@ -478,6 +633,22 @@ class BasicNfcAppState extends State<BasicNfcApp> {
                     ),
                   ),
                 ],
+              ),
+            if (_lastCardId != null &&
+                (!_signCertSuccessfullyRead && !_authCertSuccessfullyRead))
+              ElevatedButton(
+                onPressed: _sendErrorLogs,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.red,
+                  foregroundColor: Colors.white,
+                ),
+                child: const Padding(
+                  padding: EdgeInsets.all(12.0),
+                  child: Text(
+                    "Send Error Logs",
+                    style: TextStyle(fontSize: 16),
+                  ),
+                ),
               ),
           ],
         ),
