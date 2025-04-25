@@ -1,3 +1,7 @@
+## v0.0.3 2025 Fri 25. Apr:
+1- Send debug logs via email to us
+2- Misc: new launcher icon, enhances platform configs
+
 ## v0.0.2 2025 Tue 15. Apr: 
 1- Full coverage for MAV. class 
 - Reads cardholder's two certified public key {SIG, AUTH}, 
