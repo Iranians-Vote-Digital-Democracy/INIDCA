@@ -10,7 +10,7 @@ Extracts:
 - Meta FEID, AFIS
 
 ## SUPPORTED PLATFORMS
-- [x] Androind  
+- [x] [Androind](https://play.google.com/store/apps/details?id=vote.iranians.inid_assistant), published on Google Play.
 - [ ] iPhone  
 
 ## BUILD & TRY
