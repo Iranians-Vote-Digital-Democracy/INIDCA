@@ -437,20 +437,64 @@ class SmartCardOperations {
           'certificateData': '',
           'size': 0,
         };
-        bool selectionSuccess = false;
 
-        // --- Attempt 1: Pardis Commands ---
-        logger.log("Attempting file selection using Pardis commands...");
-        selectionSuccess = await _selectFiles(pardisSigningCertCommands);
+        logger.log("Pardis selection failed. Attempting file selection using MAV4/Generic commands...");
+          // Ensure we re-select the MF in case the previous attempt left us elsewhere
+        await _selectFiles({'SELECT_MF': signingCertCommands['SELECT_MF']!});
+        bool selectionSuccess = await _selectFiles(signingCertCommands);
 
-        // --- Attempt 2: MAV4/Generic Commands (if Pardis failed) ---
+        // --- Proceed with Read if any selection succeeded ---
         if (!selectionSuccess) {
           logger.log(
-              "Pardis selection failed. Attempting file selection using MAV4/Generic commands...");
-          // Ensure we re-select the MF in case the previous attempt left us elsewhere
-          await _selectFiles({'SELECT_MF': signingCertCommands['SELECT_MF']!});
-          selectionSuccess = await _selectFiles(signingCertCommands);
+              "⚠️ Both Pardis and MAV4/Generic file selections failed or encountered errors. Attempting read anyway...");
+        } else {
+          logger.log("✅ File selection successful.");
         }
+
+        logger.log("Reading signing certificate data...");
+        // Use a common, potentially larger chunk size for reading the certificate itself
+        String fullData = await _readDataWithContinuation(
+            0, 0xFF); // Increased chunk size for cert read
+
+        if (fullData.isNotEmpty) {
+          logger
+              .log("Certificate data collected: ${fullData.length ~/ 2} bytes");
+          result = {
+            'success': true,
+            'certificateData': fullData,
+            'size': fullData.length ~/ 2,
+          };
+
+          // Log certificate details to debug console
+          logger.log("Raw Certificate Hex: $fullData", highlight: true);
+          // Consider adding CertificateUtils.outputCertificateToDebugConsole here if needed
+          // CertificateUtils.outputCertificateToDebugConsole(CertificateUtils.hexStringToBytes(fullData));
+        } else {
+          logger.log(
+            "❌ Failed to read signing certificate - no data returned after selection attempts.",
+            highlight: true,
+          );
+        }
+        return result;
+      },
+      successMessage: "Signing certificate reading completed",
+      failureMessage: "Error reading signing certificate",
+    );
+  }
+
+  Future<Map<String, dynamic>?> readPardisSigningCertificate() async {
+    return _executeNfcOperation<Map<String, dynamic>>(
+      "Read Signing Certificate",
+          () async {
+        Map<String, dynamic> result = {
+          'success': false,
+          'certificateData': '',
+          'size': 0,
+        };
+
+        logger.log("Attempting file selection using Pardis commands...");
+
+        bool selectionSuccess = await _selectFiles(pardisSigningCertCommands);
 
         // --- Proceed with Read if any selection succeeded ---
         if (!selectionSuccess) {
