@@ -49,6 +49,7 @@ class BasicNfcApp extends StatefulWidget {
 class BasicNfcAppState extends State<BasicNfcApp> {
   String _log = "Press the button to send an APDU command.";
   bool _signCertSuccessfullyRead = false; // Rename for clarity
+  bool _signPardisCertSuccessfullyRead = false;
   bool _authCertSuccessfullyRead = false; // Track auth cert separately
   bool _certSuccessfullyRead = false; // General state for UI
   NFCAvailability _nfcStatus = NFCAvailability.not_supported;
@@ -95,17 +96,29 @@ class BasicNfcAppState extends State<BasicNfcApp> {
 
   Future<void> _startAutomaticExtraction() async {
     // Skip if we already have both certificates or if widget is disposed
-    if ((_signCertSuccessfullyRead && _authCertSuccessfullyRead) || !mounted) {
+    if (((_signCertSuccessfullyRead || _signPardisCertSuccessfullyRead) && _authCertSuccessfullyRead) || !mounted) {
       return;
     }
 
     _logger.log("Attempting automatic certificate extraction...");
 
     // --- Read Signing Certificate ---
-    if (!_signCertSuccessfullyRead) {
+    if (!_certSuccessfullyRead) {
+      Map<String, dynamic>? signCertResult;
       _logger.log("--> Reading Signing Certificate...");
-      Map<String, dynamic>? signCertResult =
-          await _smartCardOps.readSigningCertificate();
+      if (!_signPardisCertSuccessfullyRead) {
+        signCertResult = await _smartCardOps.readPardisSigningCertificate();
+
+        setState(() {
+          _signPardisCertSuccessfullyRead = true;
+        });
+      } else {
+        signCertResult = await _smartCardOps.readSigningCertificate();
+
+        setState(() {
+          _signCertSuccessfullyRead = true;
+        });
+      }
 
       if (!mounted) return; // Check mount status after await
 
@@ -122,7 +135,6 @@ class BasicNfcAppState extends State<BasicNfcApp> {
 
           if (mounted) {
             setState(() {
-              _signCertSuccessfullyRead = true;
               _certSuccessfullyRead = true;
             });
           }
@@ -180,7 +192,7 @@ class BasicNfcAppState extends State<BasicNfcApp> {
 
     // --- Retry Logic ---
     await Future.delayed(const Duration(seconds: 5));
-    if (mounted && !(_signCertSuccessfullyRead && _authCertSuccessfullyRead)) {
+    if (mounted && !(((_signCertSuccessfullyRead || _signPardisCertSuccessfullyRead)) && _authCertSuccessfullyRead)) {
       _startAutomaticExtraction(); // Recursive call if not all certs are read
     } else if (mounted) {
       _logger.log("✅ All required certificates extracted.", highlight: true);
@@ -192,6 +204,7 @@ class BasicNfcAppState extends State<BasicNfcApp> {
     if (!mounted) return;
     setState(() {
       _signCertSuccessfullyRead = false; // Reset both flags
+      _signPardisCertSuccessfullyRead = false;
       _authCertSuccessfullyRead = false;
       _certSuccessfullyRead = false; // Reset general flag too
       _log = "Starting certificate refresh...";
@@ -355,8 +368,8 @@ class BasicNfcAppState extends State<BasicNfcApp> {
 
     // Determine which certificate is currently in _lastCertificateData
     // This is a simplification; a better UI would let the user choose.
-    String certType = _signCertSuccessfullyRead ? "SigningCert" : "AuthCert";
-    if (!_signCertSuccessfullyRead && !_authCertSuccessfullyRead) {
+    String certType = (_signCertSuccessfullyRead || _signPardisCertSuccessfullyRead) ? "SigningCert" : "AuthCert";
+    if (!(_signCertSuccessfullyRead || _signPardisCertSuccessfullyRead) && !_authCertSuccessfullyRead) {
       certType = "UnknownCert";
     }
     String fileName = _lastCardId != null
@@ -592,7 +605,7 @@ Please send this file to hello@iranians.vote
             ),
             const SizedBox(height: 16),
             // Show buttons if *any* certificate was successfully read
-            if (_signCertSuccessfullyRead || _authCertSuccessfullyRead)
+            if (_signCertSuccessfullyRead || _authCertSuccessfullyRead || _signPardisCertSuccessfullyRead)
               Row(
                 children: [
                   Expanded(
@@ -635,7 +648,7 @@ Please send this file to hello@iranians.vote
                 ],
               ),
             if (_lastCardId != null &&
-                (!_signCertSuccessfullyRead && !_authCertSuccessfullyRead))
+                (!(_signCertSuccessfullyRead || _signPardisCertSuccessfullyRead) && !_authCertSuccessfullyRead))
               ElevatedButton(
                 onPressed: _sendErrorLogs,
                 style: ElevatedButton.styleFrom(
