@@ -101,44 +101,44 @@ class BasicNfcAppState extends State<BasicNfcApp> {
 
     _logger.log("Attempting automatic certificate extraction...");
 
-    // --- Read Signing Certificate ---
-    if (!_signCertSuccessfullyRead) {
-      _logger.log("--> Reading Signing Certificate...");
-      Map<String, dynamic>? signCertResult =
-          await _smartCardOps.readSigningCertificate();
-
-      if (!mounted) return; // Check mount status after await
-
-      if (signCertResult != null && signCertResult['success'] == true) {
-        String certHex = signCertResult['certificateData'];
-        Uint8List certBytes = CertificateUtils.hexStringToBytes(certHex);
-
-        if (certBytes.isNotEmpty) {
-          _logger.log(
-            "✅ Signing Certificate extracted successfully (${signCertResult['size']} bytes).",
-            highlight: true,
-          );
-          _processCertificateData(certBytes, "SigningCert"); // Process it
-
-          if (mounted) {
-            setState(() {
-              _signCertSuccessfullyRead = true;
-              _certSuccessfullyRead = true;
-            });
-          }
-        } else {
-          _logger.log(
-            "⚠️ Signing Certificate extraction successful but data is empty.",
-            highlight: true,
-          );
-        }
-      } else {
-        _logger.log(
-          "❌ Signing Certificate extraction failed or was cancelled.",
-          highlight: true,
-        );
-      }
-    }
+    // // --- Read Signing Certificate ---
+    // if (!_signCertSuccessfullyRead) {
+    //   _logger.log("--> Reading Signing Certificate...");
+    //   Map<String, dynamic>? signCertResult =
+    //       await _smartCardOps.readSigningCertificate();
+    //
+    //   if (!mounted) return; // Check mount status after await
+    //
+    //   if (signCertResult != null && signCertResult['success'] == true) {
+    //     String certHex = signCertResult['certificateData'];
+    //     Uint8List certBytes = CertificateUtils.hexStringToBytes(certHex);
+    //
+    //     if (certBytes.isNotEmpty) {
+    //       _logger.log(
+    //         "✅ Signing Certificate extracted successfully (${signCertResult['size']} bytes).",
+    //         highlight: true,
+    //       );
+    //       _processCertificateData(certBytes, "SigningCert"); // Process it
+    //
+    //       if (mounted) {
+    //         setState(() {
+    //           _signCertSuccessfullyRead = true;
+    //           _certSuccessfullyRead = true;
+    //         });
+    //       }
+    //     } else {
+    //       _logger.log(
+    //         "⚠️ Signing Certificate extraction successful but data is empty.",
+    //         highlight: true,
+    //       );
+    //     }
+    //   } else {
+    //     _logger.log(
+    //       "❌ Signing Certificate extraction failed or was cancelled.",
+    //       highlight: true,
+    //     );
+    //   }
+    // }
 
     // --- Read Authentication Certificate ---
     if (mounted && !_authCertSuccessfullyRead) {
@@ -178,13 +178,13 @@ class BasicNfcAppState extends State<BasicNfcApp> {
       }
     }
 
-    // --- Retry Logic ---
-    await Future.delayed(const Duration(seconds: 5));
-    if (mounted && !(_signCertSuccessfullyRead && _authCertSuccessfullyRead)) {
-      _startAutomaticExtraction(); // Recursive call if not all certs are read
-    } else if (mounted) {
-      _logger.log("✅ All required certificates extracted.", highlight: true);
-    }
+    // // --- Retry Logic ---
+    // await Future.delayed(const Duration(seconds: 5));
+    // if (mounted && !(_signCertSuccessfullyRead && _authCertSuccessfullyRead)) {
+    //   _startAutomaticExtraction(); // Recursive call if not all certs are read
+    // } else if (mounted) {
+    //   _logger.log("✅ All required certificates extracted.", highlight: true);
+    // }
   }
 
   // Method to refresh certificate (triggered by the refresh button)
